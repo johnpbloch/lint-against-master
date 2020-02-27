@@ -1,6 +1,8 @@
 #!/usr/bin/env php
 <?php
 
+use League\CLImate\CLImate;
+
 require_once __DIR__ . '/../vendor/autoload.php';
 
 function lines_to_array( string $lines, bool $filter = true ): array {
@@ -80,6 +82,30 @@ function fix_report( array $report, array $lines_changed ) {
 	];
 
 	return $new_report;
+}
+
+function climate(): CLImate {
+	static $climate;
+	if ( ! $climate ) {
+		$climate = new CLImate;
+		$climate->arguments->add( [
+			'type'         => [
+				'prefix'       => 't',
+				'longPrefix'   => 'type',
+				'description'  => 'Type of check to perform. Can be "master" to check the current HEAD against master or "staged" to check staged changes. Staged will fail if there are unstaged changes.',
+				'defaultValue' => 'master',
+			],
+			'print-report' => [
+				'prefix'      => 'p',
+				'longPrefix'  => 'print-report',
+				'description' => 'Print the report to STDOUT (overview prints to STDERR). Report will be in JSON format by default.',
+				'noValue'     => true,
+			],
+		] );
+		$climate->arguments->parse();
+	}
+
+	return $climate;
 }
 
 ( function ( $__program, ...$input ) {
