@@ -1,0 +1,101 @@
+#!/usr/bin/env php
+<?php
+
+function lines_to_array( string $lines, bool $filter = true ): array {
+	$lines = explode( "\n", $lines );
+	$lines = array_map( 'trim', $lines );
+	if ( $filter ) {
+		$lines = array_filter( $lines );
+	}
+
+	return $lines;
+}
+
+function get_lines_changed_in_file( $file ): array {
+	$file  = escapeshellarg( $file );
+	$lines = lines_to_array( `git diff --unified=0 master $file | grep -Po '^@@ -[0-9]+(,[0-9]+)? \+\K[0-9]+(,[0-9]+)?(?= @@)'` );
+	$lines = array_map( fn( $l ) => explode( ',', $l ) + [ 0, 1 ], $lines );
+	$lines = array_map( fn( $l ) => array_keys( array_fill( $l[0], $l[1], '' ) ), $lines );
+
+	return array_merge( ...$lines );
+}
+
+function get_phpcs_bin(): string {
+	if ( $_ENV['PHPCS'] ?? false ) {
+		return (string) $_ENV['PHPCS'];
+	}
+	if ( file_exists( 'vendor/bin/phpcs' ) ) {
+		return 'vendor/bin/phpcs';
+	}
+
+	return 'phpcs';
+}
+
+function run_phpcs( array $files, array $args = [] ) {
+	$files = array_map( fn( $file ) => escapeshellarg( trim( $file ) ), $files );
+	$files = implode( ' ', $files );
+	$args  = array_map( fn( $arg ) => escapeshellarg( trim( $arg ) ), $args );
+	$args  = array_filter( $args, fn( $arg ) => substr( $arg, 0, 9 ) !== '--report=' );
+	$args  = implode( ' ', $args );
+	$phpcs = get_phpcs_bin();
+
+	return json_decode( `$phpcs --report=json $args $files`, true );
+}
+
+function fix_report( array $report, array $lines_changed ) {
+	$total_errors = $total_warnings = $total_fixable = 0;
+	$new_report   = [ 'files' => [] ];
+	foreach ( $report['files'] as $file => $file_report ) {
+		$errors     = $warnings = $fixable = 0;
+		$messages   = [];
+		$file_lines = $lines_changed[ $file ] ?? [];
+		foreach ( $file_report['messages'] ?? [] as $message ) {
+			if ( array_search( $message['line'] ?? 0, $file_lines, true ) === false ) {
+				continue;
+			}
+			$messages[] = $message;
+			if ( $message['fixable'] ?? false ) {
+				$fixable ++;
+			}
+			if ( strtolower( $message['type'] ) === 'warning' ) {
+				$warnings ++;
+			} else {
+				$errors ++;
+			}
+		}
+		if ( ! $messages ) {
+			continue;
+		}
+		$new_report['files'][ $file ] = compact( 'errors', 'warnings', 'messages' );
+		$total_errors                 += $errors;
+		$total_warnings               += $warnings;
+		$total_fixable                += $fixable;
+	}
+	$new_report['totals'] = [
+		'errors'   => $total_errors,
+		'warnings' => $total_warnings,
+		'fixable'  => $total_fixable,
+	];
+
+	return $new_report;
+}
+
+( function ( $__program, ...$input ) {
+	$s                 = DIRECTORY_SEPARATOR;
+	$cwd               = rtrim( getcwd(), $s );
+	$files_changed     = array_map( fn( $f ) => $cwd . $s . ltrim( $f, $s ), lines_to_array( `git diff --name-only master` ) );
+	$all_changed_lines = array_combine( $files_changed, array_map( fn( $file ) => get_lines_changed_in_file( $file ), $files_changed ) );
+	$report_file       = tempnam( '/tmp/', 'merge-report' );
+	$report            = run_phpcs( $files_changed, $input );
+	$fixed_report      = fix_report( $report, $all_changed_lines );
+	$errors            = (int) ( $fixed_report['totals']['errors'] ?? 0 );
+	$warnings          = (int) ( $fixed_report['totals']['warnings'] ?? 0 );
+	if ( ( $errors + $warnings ) === 0 ) {
+		exit( 0 );
+	}
+	$fixable = (int) ( $fixed_report['totals']['fixable'] ?? 0 );
+	file_put_contents( $report_file, json_encode( $fixed_report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+	fwrite( STDERR, sprintf( "phpcs found %d errors and %d warnings in your changes from master. %d can be fixed automatically with phpcbf.\n", $errors, $warnings, $fixable ) );
+	fwrite( STDERR, sprintf( "The report can be found in JSON format in %s\n", $report_file ) );
+	exit( 2 );
+} )( ...$argv );
