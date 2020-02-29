@@ -161,22 +161,29 @@ function end_with_error( string $message, ?int $code, ?Throwable $exception = nu
 	exit( min( max( 1, $code ), 255 ) );
 }
 
-( function ( $__program, ...$input ) {
-	$s                 = DIRECTORY_SEPARATOR;
-	$cwd               = rtrim( getcwd(), $s );
-	$files_changed     = array_map( fn( $f ) => $cwd . $s . ltrim( $f, $s ), lines_to_array( `git diff --name-only master` ) );
-	$all_changed_lines = array_combine( $files_changed, array_map( fn( $file ) => get_lines_changed_in_file( $file ), $files_changed ) );
-	$report_file       = tempnam( '/tmp/', 'merge-report' );
-	$report            = run_phpcs( $files_changed, $input );
-	$fixed_report      = fix_report( $report, $all_changed_lines );
-	$errors            = (int) ( $fixed_report['totals']['errors'] ?? 0 );
-	$warnings          = (int) ( $fixed_report['totals']['warnings'] ?? 0 );
-	if ( ( $errors + $warnings ) === 0 ) {
-		exit( 0 );
+( function () {
+	try {
+		$s                 = DIRECTORY_SEPARATOR;
+		$cwd               = rtrim( getcwd(), $s );
+		$files_changed     = array_map( fn( $f ) => $cwd . $s . ltrim( $f, $s ), get_changed_files() );
+		$all_changed_lines = array_combine( $files_changed, array_map( fn( $file ) => get_lines_changed_in_file( $file ), $files_changed ) );
+		$report            = run_phpcs( $files_changed, climate()->arguments->trailingArray() ?? [] );
+		$fixed_report      = fix_report( $report, $all_changed_lines );
+		$errors            = (int) ( $fixed_report['totals']['errors'] ?? 0 );
+		$warnings          = (int) ( $fixed_report['totals']['warnings'] ?? 0 );
+		if ( ( $errors + $warnings ) === 0 ) {
+			exit( 0 );
+		}
+		$report_file = tempnam( sys_get_temp_dir(), 'merge-report-' );
+		$fixable     = (int) ( $fixed_report['totals']['fixable'] ?? 0 );
+		climate()->error( sprintf( 'phpcs found %d errors and %d warnings in your changes from master. %d can be fixed automatically with phpcbf.', $errors, $warnings, $fixable ) );
+		if ( climate()->arguments->get( 'print_report' ) ) {
+			climate()->json( $fixed_report );
+			exit( 3 );
+		}
+		file_put_contents( $report_file, json_encode( $fixed_report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+		end_with_error( sprintf( 'The report can be found in JSON format in %s', $report_file ), 2 );
+	} catch ( Throwable $e ) {
+		end_with_error( 'An unexpected error occurred:', null, $e );
 	}
-	$fixable = (int) ( $fixed_report['totals']['fixable'] ?? 0 );
-	file_put_contents( $report_file, json_encode( $fixed_report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
-	fwrite( STDERR, sprintf( "phpcs found %d errors and %d warnings in your changes from master. %d can be fixed automatically with phpcbf.\n", $errors, $warnings, $fixable ) );
-	fwrite( STDERR, sprintf( "The report can be found in JSON format in %s\n", $report_file ) );
-	exit( 2 );
-} )( ...$argv );
+} )();
