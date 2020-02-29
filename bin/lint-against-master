@@ -108,6 +108,30 @@ function climate(): CLImate {
 	return $climate;
 }
 
+function get_type(): string {
+	$type = strtolower( climate()->arguments->get( 'type' ) );
+	if ( ! in_array( $type, [ 'master', 'staged' ] ) ) {
+		throw new InvalidArgumentException( sprintf( 'Invalid type value: %s', $type ), 1 );
+	}
+	if ( $type === 'staged' && lines_to_array( `git diff --name-status | grep '^M'` ) ) {
+		end_with_error( <<<ERR
+			Unstaged changes detected in the working tree!
+			Please stage all modifications or stash unstaged changes. Untracked and deleted files will not trigger this error.
+			ERR, 2 );
+	}
+
+	return $type;
+}
+
+function end_with_error( string $message, ?int $code, ?Throwable $exception = null ) {
+	climate()->error( $message );
+	if ( $exception ) {
+		climate()->error( $exception->getMessage() );
+		$code = $exception->getCode();
+	}
+	exit( min( max( 1, $code ), 255 ) );
+}
+
 ( function ( $__program, ...$input ) {
 	$s                 = DIRECTORY_SEPARATOR;
 	$cwd               = rtrim( getcwd(), $s );
