@@ -4,13 +4,19 @@
     "require": {
         "php": ">=7.4",
         "squizlabs/php_codesniffer": "^3.0",
-        "league/climate": "^3.5"
+        "league/climate": "dev-trailing-array"
     },
     "license": "MIT",
     "authors": [
         {
             "name": "John P. Bloch",
             "email": "johnpbloch@users.noreply.github.com"
+        }
+    ],
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/johnpbloch/climate"
         }
     ],
     "bin": ["bin/lint-against-master"],
