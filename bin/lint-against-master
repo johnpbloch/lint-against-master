@@ -134,6 +134,24 @@ function get_type(): string {
 	return $type;
 }
 
+function get_changed_files(): array {
+	$type = get_type();
+	switch ( $type ) {
+		case 'master':
+			$arg = 'master HEAD';
+			break;
+		case 'staged':
+			$arg = '--staged';
+			break;
+		default:
+			throw new LogicException( 'No feeding the gremlins after midnight' );
+	}
+	$renames = lines_to_array( `git diff --name-status $arg | grep '^R' | awk '{print $3}'` );
+	$changed = lines_to_array( `git diff --name-status $arg | grep -Pv '^[RD]' | awk '{print $2}'` );
+
+	return [ ...$renames, ...$changed ];
+}
+
 function end_with_error( string $message, ?int $code, ?Throwable $exception = null ) {
 	climate()->error( $message );
 	if ( $exception ) {
