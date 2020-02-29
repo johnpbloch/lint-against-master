@@ -16,8 +16,19 @@ function lines_to_array( ?string $lines, bool $filter = true ): array {
 }
 
 function get_lines_changed_in_file( $file ): array {
+	$type = get_type();
+	switch ( $type ) {
+		case 'master':
+			$arg = 'master HEAD';
+			break;
+		case 'staged':
+			$arg = '--staged';
+			break;
+		default:
+			throw new LogicException( 'Please do not bathe the gremlins' );
+	}
 	$file  = escapeshellarg( $file );
-	$lines = lines_to_array( `git diff --unified=0 master $file | grep -Po '^@@ -[0-9]+(,[0-9]+)? \+\K[0-9]+(,[0-9]+)?(?= @@)'` );
+	$lines = lines_to_array( `git diff --unified=0 $arg $file | grep -Po '^@@ -[0-9]+(,[0-9]+)? \+\K[0-9]+(,[0-9]+)?(?= @@)'` );
 	$lines = array_map( fn( $l ) => explode( ',', $l ) + [ 0, 1 ], $lines );
 	$lines = array_map( fn( $l ) => array_keys( array_fill( $l[0], $l[1], '' ) ), $lines );
 
@@ -92,10 +103,10 @@ function climate(): CLImate {
 			'type'         => [
 				'prefix'       => 't',
 				'longPrefix'   => 'type',
-				'description'  => 'Type of check to perform. Can be "master" to check the current HEAD against master or "staged" to check staged changes. Staged will fail if there are unstaged changes.',
+				'description'  => 'Type of check to perform. Can be "master" to check the current HEAD against master or "staged" to check staged changes. Staged will fail if there are unstaged changes on tracked files.',
 				'defaultValue' => 'master',
 			],
-			'print-report' => [
+			'print_report' => [
 				'prefix'      => 'p',
 				'longPrefix'  => 'print-report',
 				'description' => 'Print the report to STDOUT (overview prints to STDERR). Report will be in JSON format by default.',
