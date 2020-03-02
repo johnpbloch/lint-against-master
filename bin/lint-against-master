@@ -203,8 +203,8 @@ function phpcs_file( string $file_path ): File {
 					$message['message'] ?? '',
 					$message['line'] ?? 1,
 					$message['column'] ?? 1,
-					null,
-					null,
+					$message['source'] ?? 'Internal.Unknown',
+					[],
 					$message['severity'] ?? 5,
 					(bool) ( $message['fixable'] ?? false )
 				);
