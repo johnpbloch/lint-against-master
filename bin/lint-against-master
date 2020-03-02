@@ -3,7 +3,7 @@
 
 use League\CLImate\CLImate;
 use JPB\Lint\File;
-use PHP_CodeSniffer\{Config, Reporter, Ruleset, Files};
+use PHP_CodeSniffer\{Config, Reporter, Ruleset, Runner, Files};
 
 if ( file_exists( __DIR__ . '/../vendor/autoload.php' ) ) {
 	require_once __DIR__ . '/../vendor/autoload.php';
@@ -163,13 +163,21 @@ function end_with_error( string $message, ?int $code, ?Throwable $exception = nu
 	exit( min( max( 1, $code ), 255 ) );
 }
 
-function phpcs_config(): Config {
-	static $config;
-	if ( ! $config ) {
-		$config = new Config( climate()->arguments->trailingArray() ?? [], false );
+function phpcs_runner(): Runner {
+	static $runner;
+	if ( ! $runner ) {
+		$runner         = new Runner();
+		$runner->config = new Config( climate()->arguments->trailingArray() ?? [], false );
+		$runner->init();
 	}
 
-	return $config;
+	return $runner;
+}
+
+function phpcs_config(): Config {
+	$runner = phpcs_runner();
+
+	return $runner->config;
 }
 
 function phpcs_ruleset(): Ruleset {
@@ -200,6 +208,12 @@ function phpcs_file( string $file_path ): File {
 		}
 		$fixable = (int) ( $fixed_report['totals']['fixable'] ?? 0 );
 		climate()->error( sprintf( 'phpcs found %d errors and %d warnings in your changes from master. %d can be fixed automatically with phpcbf.', $errors, $warnings, $fixable ) );
+		if ( ! defined( 'PHP_CODESNIFFER_VERBOSITY' ) ) {
+			define( 'PHP_CODESNIFFER_VERBOSITY', 0 );
+		}
+		if ( ! defined( 'PHP_CODESNIFFER_CBF' ) ) {
+			define( 'PHP_CODESNIFFER_CBF', false );
+		}
 		$reporter = new Reporter( phpcs_config() );
 		foreach ( $fixed_report['files'] ?? [] as $path => $file_report ) {
 			$phpcs_file = phpcs_file( $path );
