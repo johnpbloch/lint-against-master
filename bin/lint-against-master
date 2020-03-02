@@ -5,7 +5,11 @@ use League\CLImate\CLImate;
 use JPB\Lint\File;
 use PHP_CodeSniffer\{Config, Reporter, Ruleset, Files};
 
-require_once __DIR__ . '/../vendor/autoload.php';
+if ( file_exists( __DIR__ . '/../vendor/autoload.php' ) ) {
+	require_once __DIR__ . '/../vendor/autoload.php';
+} elseif ( file_exists( __DIR__ . '/../../../vendor/autoload.php' ) ) {
+	require_once __DIR__ . '/../../../vendor/autoload.php';
+}
 
 function lines_to_array( ?string $lines, bool $filter = true ): array {
 	$lines = explode( "\n", $lines ?? '' );
