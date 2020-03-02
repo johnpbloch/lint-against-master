@@ -19,6 +19,12 @@
             "url": "https://github.com/johnpbloch/climate"
         }
     ],
+    "autoload": {
+        "psr-4": {
+            "JPB\\Lint\\": "./src"
+        },
+        "files": ["./vendor/squizlabs/php_codesniffer/autoload.php"]
+    },
     "bin": ["bin/lint-against-master"],
     "minimum-stability": "dev",
     "prefer-stable": true

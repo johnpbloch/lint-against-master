@@ -2,6 +2,8 @@
 <?php
 
 use League\CLImate\CLImate;
+use JPB\Lint\File;
+use PHP_CodeSniffer\{Config, Reporter, Ruleset, Files};
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -100,17 +102,11 @@ function climate(): CLImate {
 	if ( ! $climate ) {
 		$climate = new CLImate;
 		$climate->arguments->add( [
-			'type'         => [
+			'type' => [
 				'prefix'       => 't',
 				'longPrefix'   => 'type',
 				'description'  => 'Type of check to perform. Can be "master" to check the current HEAD against master or "staged" to check staged changes. Staged will fail if there are unstaged changes on tracked files.',
 				'defaultValue' => 'master',
-			],
-			'print_report' => [
-				'prefix'      => 'p',
-				'longPrefix'  => 'print-report',
-				'description' => 'Print the report to STDOUT (overview prints to STDERR). Report will be in JSON format by default.',
-				'noValue'     => true,
 			],
 		] );
 		$climate->arguments->parse();
@@ -161,6 +157,28 @@ function end_with_error( string $message, ?int $code, ?Throwable $exception = nu
 	exit( min( max( 1, $code ), 255 ) );
 }
 
+function phpcs_config(): Config {
+	static $config;
+	if ( ! $config ) {
+		$config = new Config( climate()->arguments->trailingArray() ?? [], false );
+	}
+
+	return $config;
+}
+
+function phpcs_ruleset(): Ruleset {
+	static $ruleset;
+	if ( ! $ruleset ) {
+		$ruleset = new Ruleset( phpcs_config() );
+	}
+
+	return $ruleset;
+}
+
+function phpcs_file( string $file_path ): File {
+	return new File( $file_path, phpcs_ruleset(), phpcs_config() );
+}
+
 ( function () {
 	try {
 		$s                 = DIRECTORY_SEPARATOR;
@@ -174,15 +192,27 @@ function end_with_error( string $message, ?int $code, ?Throwable $exception = nu
 		if ( ( $errors + $warnings ) === 0 ) {
 			exit( 0 );
 		}
-		$report_file = tempnam( sys_get_temp_dir(), 'merge-report-' );
-		$fixable     = (int) ( $fixed_report['totals']['fixable'] ?? 0 );
+		$fixable = (int) ( $fixed_report['totals']['fixable'] ?? 0 );
 		climate()->error( sprintf( 'phpcs found %d errors and %d warnings in your changes from master. %d can be fixed automatically with phpcbf.', $errors, $warnings, $fixable ) );
-		if ( climate()->arguments->get( 'print_report' ) ) {
-			climate()->json( $fixed_report );
-			exit( 3 );
+		$reporter = new Reporter( phpcs_config() );
+		foreach ( $fixed_report['files'] ?? [] as $path => $file_report ) {
+			$phpcs_file = phpcs_file( $path );
+			foreach ( $file_report['messages'] ?? [] as $message ) {
+				$phpcs_file->addRawMessage(
+					strtolower( $message['type'] ?? '' ) === 'error',
+					$message['message'] ?? '',
+					$message['line'] ?? 1,
+					$message['column'] ?? 1,
+					null,
+					null,
+					$message['severity'] ?? 5,
+					(bool) ( $message['fixable'] ?? false )
+				);
+			}
+			/** @var Files\File $phpcs_file */
+			$reporter->cacheFileReport( $phpcs_file );
 		}
-		file_put_contents( $report_file, json_encode( $fixed_report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
-		end_with_error( sprintf( 'The report can be found in JSON format in %s', $report_file ), 2 );
+		$reporter->printReports();
 	} catch ( Throwable $e ) {
 		end_with_error( 'An unexpected error occurred:', null, $e );
 	}
