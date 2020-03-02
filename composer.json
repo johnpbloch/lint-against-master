@@ -22,8 +22,7 @@
     "autoload": {
         "psr-4": {
             "JPB\\Lint\\": "./src"
-        },
-        "files": ["./vendor/squizlabs/php_codesniffer/autoload.php"]
+        }
     },
     "bin": ["bin/lint-against-master"],
     "minimum-stability": "dev",
