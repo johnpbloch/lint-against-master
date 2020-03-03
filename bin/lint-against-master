@@ -233,6 +233,7 @@ function phpcs_file( string $file_path ): File {
 			$reporter->cacheFileReport( $phpcs_file );
 		}
 		$reporter->printReports();
+		exit( 2 );
 	} catch ( Throwable $e ) {
 		end_with_error( 'An unexpected error occurred:', null, $e );
 	}
