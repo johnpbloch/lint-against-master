@@ -167,7 +167,10 @@ function phpcs_runner(): Runner {
 	static $runner;
 	if ( ! $runner ) {
 		$runner         = new Runner();
-		$runner->config = new Config( climate()->arguments->trailingArray() ?? [], false );
+		$arguments      = method_exists( climate()->arguments, 'trailingArray' )
+			? climate()->arguments->trailingArray()
+			: climate()->arguments->trailing();
+		$runner->config = new Config( $arguments ?? [], false );
 		$runner->init();
 	}
 
