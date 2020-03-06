@@ -167,10 +167,7 @@ function phpcs_runner(): Runner {
 	static $runner;
 	if ( ! $runner ) {
 		$runner         = new Runner();
-		$arguments      = method_exists( climate()->arguments, 'trailingArray' )
-			? climate()->arguments->trailingArray()
-			: climate()->arguments->trailing();
-		$runner->config = new Config( $arguments ?? [], false );
+		$runner->config = new Config( get_trailing(), false );
 		$runner->init();
 	}
 
@@ -181,6 +178,14 @@ function phpcs_config(): Config {
 	$runner = phpcs_runner();
 
 	return $runner->config;
+}
+
+function get_trailing(): array {
+	$arguments = method_exists( climate()->arguments, 'trailingArray' )
+		? climate()->arguments->trailingArray()
+		: explode( ' ', climate()->arguments->trailing() );
+
+	return $arguments ?? [];
 }
 
 function phpcs_ruleset(): Ruleset {
@@ -202,7 +207,7 @@ function phpcs_file( string $file_path ): File {
 		$cwd               = rtrim( getcwd(), $s );
 		$files_changed     = array_map( fn( $f ) => $cwd . $s . ltrim( $f, $s ), get_changed_files() );
 		$all_changed_lines = array_combine( $files_changed, array_map( fn( $file ) => get_lines_changed_in_file( $file ), $files_changed ) );
-		$report            = run_phpcs( $files_changed, climate()->arguments->trailingArray() ?? [] );
+		$report            = run_phpcs( $files_changed, get_trailing() );
 		$fixed_report      = fix_report( $report, $all_changed_lines );
 		$errors            = (int) ( $fixed_report['totals']['errors'] ?? 0 );
 		$warnings          = (int) ( $fixed_report['totals']['warnings'] ?? 0 );
